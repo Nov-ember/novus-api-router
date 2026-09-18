@@ -2,6 +2,9 @@ target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+REQUIREMENTS.md
+docs/
+.env
 
 ### STS ###
 .apt_generated

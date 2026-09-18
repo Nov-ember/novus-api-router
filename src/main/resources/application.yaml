@@ -1,3 +1,38 @@
 spring:
   application:
     name: novus-api-router
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:novus_api_router}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: ${REDIS_DATABASE:0}
+  ai:
+    openai:
+          base-url: ${UPSTREAM_BASE_URL}
+          api-key: ${UPSTREAM_API_KEY}
+          chat:
+            model: ${UPSTREAM_MODEL}
+
+server:
+  port: ${SERVER_PORT:8080}
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.example.novusapirouter.model.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+novus:
+  router:
+    model-aliases:
+      chat-default: ${UPSTREAM_MODEL}
+    access-key: ${ACCESS_KEY}
+
+
