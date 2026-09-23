@@ -1,8 +1,12 @@
 package com.example.novusapirouter.server.service;
 
-import com.example.novusapirouter.model.dto.OpenAiChatCompletionRequest;
-import com.example.novusapirouter.model.vo.OpenAiChatCompletionResponse;
+import com.example.novusapirouter.model.dto.ChatCompletionRequest;
+import com.example.novusapirouter.model.vo.ChatCompletionChunkResponse;
+import com.example.novusapirouter.model.vo.ChatCompletionResponse;
+import reactor.core.publisher.Flux;
 
 public interface ChatCompletionService {
-    OpenAiChatCompletionResponse createAChatCompletion(String apiKey, OpenAiChatCompletionRequest request);
+    ChatCompletionResponse chatCompletion(String apiKey, ChatCompletionRequest request);
+
+    Flux<ChatCompletionChunkResponse> streamChatCompletion(String apiKey, ChatCompletionRequest request);
 }

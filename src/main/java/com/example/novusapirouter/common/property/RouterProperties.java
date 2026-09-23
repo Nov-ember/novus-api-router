@@ -13,4 +13,5 @@ import java.util.Map;
 public class RouterProperties {
     private String accessKey;
     private Map<String, String> modelAliases = new HashMap<>();
+    private Long streamTimeOutMillis = 120_000L;
 }

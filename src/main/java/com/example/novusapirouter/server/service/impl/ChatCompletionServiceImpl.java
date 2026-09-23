@@ -2,8 +2,9 @@ package com.example.novusapirouter.server.service.impl;
 
 import com.example.novusapirouter.common.exception.RouterException;
 import com.example.novusapirouter.common.property.RouterProperties;
-import com.example.novusapirouter.model.dto.OpenAiChatCompletionRequest;
-import com.example.novusapirouter.model.vo.OpenAiChatCompletionResponse;
+import com.example.novusapirouter.model.dto.ChatCompletionRequest;
+import com.example.novusapirouter.model.vo.ChatCompletionChunkResponse;
+import com.example.novusapirouter.model.vo.ChatCompletionResponse;
 import com.example.novusapirouter.server.service.ChatCompletionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -16,9 +17,11 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import reactor.core.publisher.Flux;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 
 @Service
@@ -29,7 +32,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
     private final RouterProperties routerProperties;
 
     @Override
-    public OpenAiChatCompletionResponse createAChatCompletion(String apiKey, OpenAiChatCompletionRequest request) {
+    public ChatCompletionResponse chatCompletion(String apiKey, ChatCompletionRequest request) {
         checkApiKey(apiKey);
         checkRequest(request);
 
@@ -48,7 +51,40 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                 .call()
                 .chatResponse();
 
-        return toOpenAiResponse(upstreamModel, chatResponse);
+        return toOpenAiResponse(modelAlias, chatResponse);
+    }
+
+    @Override
+    public Flux<ChatCompletionChunkResponse> streamChatCompletion(String apiKey, ChatCompletionRequest request) {
+        checkApiKey(apiKey);
+        checkRequest(request);
+
+        String modelAlias = request.getModel();
+        String upstreamModel = routerProperties.getModelAliases().get(modelAlias);
+
+        checkModel(upstreamModel);
+
+        List<Message> messages = request.getMessages().stream()
+                .map(this::toSpringAiMessage)
+                .toList();
+
+        Flux<ChatResponse> chatResponseFlux = chatClient.prompt()
+                .messages(messages)
+                .options(ChatOptions.builder().model(upstreamModel))
+                .stream()
+                .chatResponse();
+
+        long created = Instant.now().getEpochSecond();
+
+        return chatResponseFlux
+                .filter(chatResponse -> chatResponse.getResult() != null) // 暂不处理 usage
+                .index()
+                .map(tuple2 -> toOpenAiChunkResponse(
+                        modelAlias,
+                        tuple2.getT2(),
+                        created,
+                        tuple2.getT1() == 0
+                ));
     }
 
     private void checkModel(String model) {
@@ -72,7 +108,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         }
     }
 
-    private void checkRequest(OpenAiChatCompletionRequest request) {
+    private void checkRequest(ChatCompletionRequest request) {
         if (request == null) {
             throw new RouterException(
                     HttpStatus.BAD_REQUEST,
@@ -100,18 +136,8 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                     "messages"
             );
         }
-        if (Boolean.TRUE.equals(request.getStream())) {
-            throw new RouterException(
-                    HttpStatus.BAD_REQUEST,
-                    "当前版本不支持 stream 选项",
-                    "invalid_request_error",
-                    "unsupported_parameter",
-                    "stream"
-            );
-        }
-
         for (int i = 0; i < request.getMessages().size(); i++) {
-            OpenAiChatCompletionRequest.Message message = request.getMessages().get(i);
+            ChatCompletionRequest.Message message = request.getMessages().get(i);
             String param = "messages[" + i + "]";
             if (message == null) {
                 throw new RouterException(
@@ -143,7 +169,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         }
     }
 
-    private OpenAiChatCompletionResponse toOpenAiResponse(String requestedModel, ChatResponse chatResponse) {
+    private ChatCompletionResponse toOpenAiResponse(String modelAlias, ChatResponse chatResponse) {
         if (chatResponse == null || chatResponse.getResult() == null) {
             throw new RouterException(
                     HttpStatus.BAD_GATEWAY,
@@ -158,25 +184,50 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
 
         Generation generation = chatResponse.getResult();
         String content = generation.getOutput().getText();
-        String finishReason = generation.getMetadata().getFinishReason();
+        String finishReason = normalizeFinishReason(generation.getMetadata().getFinishReason());
 
-        OpenAiChatCompletionResponse.Message message =
-                new OpenAiChatCompletionResponse.Message("assistant", content);
+        ChatCompletionResponse.Message message =
+                new ChatCompletionResponse.Message("assistant", content);
 
-        OpenAiChatCompletionResponse.Choice choice =
-                new OpenAiChatCompletionResponse.Choice(0, message, finishReason);
+        ChatCompletionResponse.Choice choice =
+                new ChatCompletionResponse.Choice(0, message, finishReason);
 
-        return new OpenAiChatCompletionResponse(
+        return new ChatCompletionResponse(
                 id,
                 "chat.completion",
                 Instant.now().getEpochSecond(),
-                requestedModel,
+                modelAlias,
                 List.of(choice)
         );
     }
 
+    private ChatCompletionChunkResponse toOpenAiChunkResponse(String modelAlias, ChatResponse chatResponse, long created, boolean first) {
 
-    private Message toSpringAiMessage(OpenAiChatCompletionRequest.Message message) {
+        String id = chatResponse.getMetadata().getId();
+
+        Generation generation = chatResponse.getResult();
+        AssistantMessage output = generation.getOutput();
+
+        String content = output.getText();
+        String finishReason = normalizeFinishReason(generation.getMetadata().getFinishReason());
+        String role = first ? output.getMessageType().getValue() : null;
+
+        ChatCompletionChunkResponse.Delta delta =
+                new ChatCompletionChunkResponse.Delta(role, content);
+
+        ChatCompletionChunkResponse.Choice choice =
+                new ChatCompletionChunkResponse.Choice(0, delta, finishReason);
+
+        return new ChatCompletionChunkResponse(
+                id,
+                "chat.completion.chunk",
+                created,
+                modelAlias,
+                List.of(choice)
+        );
+    }
+
+    private Message toSpringAiMessage(ChatCompletionRequest.Message message) {
         return switch (message.getRole()) {
             case "system" -> new SystemMessage(message.getContent());
             case "user" -> new UserMessage(message.getContent());
@@ -211,5 +262,10 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                     null
             );
         }
+    }
+
+    // finish_reason 字符串全大写转全小写
+    private String normalizeFinishReason(String finishReason) {
+        return finishReason == null ? null : finishReason.toLowerCase(Locale.ROOT);
     }
 }

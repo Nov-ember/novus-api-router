@@ -7,15 +7,15 @@ import java.util.List;
 
 @Getter
 @AllArgsConstructor
-public class OpenAiChatCompletionRequest {
-    private String model;
-    private List<Message> messages;
-    private Boolean stream;
+public class ChatCompletionRequest {
+    private final String model;
+    private final List<Message> messages;
+    private final Boolean stream;
 
     @Getter
     @AllArgsConstructor
     public static class Message {
-        private String role;
-        private String content;
+        private final String role;
+        private final String content;
     }
 }

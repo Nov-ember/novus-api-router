@@ -5,7 +5,7 @@ import lombok.Getter;
 
 @Getter
 @AllArgsConstructor
-public class OpenAiErrorResponse {
+public class ErrorResponse {
 
     private final ErrorDetail error;
 

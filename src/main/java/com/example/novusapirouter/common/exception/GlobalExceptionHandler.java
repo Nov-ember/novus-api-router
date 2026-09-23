@@ -1,6 +1,6 @@
 package com.example.novusapirouter.common.exception;
 
-import com.example.novusapirouter.model.vo.OpenAiErrorResponse;
+import com.example.novusapirouter.model.vo.ErrorResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -9,15 +9,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(RouterException.class)
-    public ResponseEntity<OpenAiErrorResponse> handleRouterException(RouterException e) {
-        OpenAiErrorResponse.ErrorDetail errorDetail = new OpenAiErrorResponse.ErrorDetail(
+    public ResponseEntity<ErrorResponse> handleRouterException(RouterException e) {
+        ErrorResponse.ErrorDetail errorDetail = new ErrorResponse.ErrorDetail(
                 e.getMessage(),
                 e.getType(),
                 e.getParam(),
                 e.getCode()
         );
 
-        OpenAiErrorResponse errorResponse = new OpenAiErrorResponse(errorDetail);
+        ErrorResponse errorResponse = new ErrorResponse(errorDetail);
 
         return new ResponseEntity<>(errorResponse, e.getStatus());
     }
