@@ -3,7 +3,6 @@ package com.example.novusapirouter.server.controller;
 import com.example.novusapirouter.common.property.RouterProperties;
 import com.example.novusapirouter.model.dto.ChatCompletionRequest;
 import com.example.novusapirouter.model.vo.ChatCompletionChunkResponse;
-import com.example.novusapirouter.model.vo.ChatCompletionResponse;
 import com.example.novusapirouter.server.service.ChatCompletionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
@@ -11,12 +10,8 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 
-import java.io.IOException;
-import java.io.UncheckedIOException;
 import java.time.Duration;
 
 @RestController

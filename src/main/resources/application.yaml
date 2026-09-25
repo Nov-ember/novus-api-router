@@ -13,12 +13,19 @@ spring:
       port: ${REDIS_PORT:6379}
       password: ${REDIS_PASSWORD:}
       database: ${REDIS_DATABASE:0}
+
   ai:
-    openai:
-          base-url: ${UPSTREAM_BASE_URL}
-          api-key: ${UPSTREAM_API_KEY}
-          chat:
-            model: ${UPSTREAM_MODEL}
+    model:
+      chat: none
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        transcription: none
+        speech: none
+    chat:
+      client:
+        enabled: false
 
 server:
   port: ${SERVER_PORT:8080}
@@ -31,8 +38,23 @@ mybatis-plus:
 
 novus:
   router:
+    access-key: ${ROUTER_ACCESS_KEY}
+    stream-time-out-millis: 120000
+    channels:
+      qwen-01:
+        base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        api-key: ${QWEN_API_KEY}
+      deepseek-01:
+        base-url: https://api.deepseek.com
+        api-key: ${DEEPSEEK_API_KEY}
     model-aliases:
-      chat-default: ${UPSTREAM_MODEL}
-    access-key: ${ACCESS_KEY}
+      "[qwen3.8-flash]":
+        channel: qwen-01
+        upstream-model: qwen3.8-flash
+      deepseek-flash:
+        channel: deepseek-01
+        upstream-model: deepseek-flash
+
+
 
 

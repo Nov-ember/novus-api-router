@@ -22,13 +22,14 @@ import reactor.core.publisher.Flux;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
 public class ChatCompletionServiceImpl implements ChatCompletionService {
 
-    private final ChatClient chatClient;
+    private final Map<String, ChatClient> chatClients;
     private final RouterProperties routerProperties;
 
     @Override
@@ -37,9 +38,9 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         checkRequest(request);
 
         String modelAlias = request.getModel();
-        String upstreamModel = routerProperties.getModelAliases().get(modelAlias);
-
-        checkModel(upstreamModel);
+        RouterProperties.ModelMapping mapping = resolveModel(modelAlias);
+        ChatClient chatClient = chatClients.get(mapping.getChannel());
+        String upstreamModel = mapping.getUpstreamModel();
 
         List<Message> messages = request.getMessages().stream()
                 .map(this::toSpringAiMessage)
@@ -60,9 +61,9 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         checkRequest(request);
 
         String modelAlias = request.getModel();
-        String upstreamModel = routerProperties.getModelAliases().get(modelAlias);
-
-        checkModel(upstreamModel);
+        RouterProperties.ModelMapping mapping = resolveModel(modelAlias);
+        ChatClient chatClient = chatClients.get(mapping.getChannel());
+        String upstreamModel = mapping.getUpstreamModel();
 
         List<Message> messages = request.getMessages().stream()
                 .map(this::toSpringAiMessage)
@@ -77,7 +78,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         long created = Instant.now().getEpochSecond();
 
         return chatResponseFlux
-                .filter(chatResponse -> chatResponse.getResult() != null) // 暂不处理 usage
+                .filter(chatResponse -> chatResponse.getResult() != null) // 暂不处理 usage 用量
                 .index()
                 .map(tuple2 -> toOpenAiChunkResponse(
                         modelAlias,
@@ -87,8 +88,9 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                 ));
     }
 
-    private void checkModel(String model) {
-        if (model == null) {
+    private RouterProperties.ModelMapping resolveModel(String modelAlias) {
+        RouterProperties.ModelMapping mapping = routerProperties.getModelAliases().get(modelAlias);
+        if (mapping == null) {
             throw new RouterException(
                     HttpStatus.NOT_FOUND,
                     "模型不存在",
@@ -97,15 +99,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                     "model"
             );
         }
-        if (model.isBlank()) {
-            throw new RouterException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "模型映射配置异常",
-                    "server_error",
-                    "internal_error",
-                    null
-            );
-        }
+        return mapping;
     }
 
     private void checkRequest(ChatCompletionRequest request) {
