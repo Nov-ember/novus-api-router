@@ -5,6 +5,7 @@ import com.example.novusapirouter.common.property.RouterProperties;
 import com.example.novusapirouter.model.dto.ChatCompletionRequest;
 import com.example.novusapirouter.model.vo.ChatCompletionChunkResponse;
 import com.example.novusapirouter.model.vo.ChatCompletionResponse;
+import com.example.novusapirouter.model.vo.ChatCompletionUsage;
 import com.example.novusapirouter.server.service.ChatCompletionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -12,6 +13,8 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -20,6 +23,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -78,9 +82,8 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         long created = Instant.now().getEpochSecond();
 
         return chatResponseFlux
-                .filter(chatResponse -> chatResponse.getResult() != null) // 暂不处理 usage 用量
                 .index()
-                .map(tuple2 -> toOpenAiChunkResponse(
+                .concatMap(tuple2 -> toOpenAiChunkResponse(
                         modelAlias,
                         tuple2.getT2(),
                         created,
@@ -174,7 +177,9 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
             );
         }
 
-        String id = chatResponse.getMetadata().getId();
+        ChatResponseMetadata metadata = chatResponse.getMetadata();
+
+        String id = metadata.getId();
 
         Generation generation = chatResponse.getResult();
         String content = generation.getOutput().getText();
@@ -186,39 +191,76 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         ChatCompletionResponse.Choice choice =
                 new ChatCompletionResponse.Choice(0, message, finishReason);
 
+        Usage upstreamUsage = metadata.getUsage();
+        ChatCompletionUsage usage = new ChatCompletionUsage(
+                upstreamUsage.getPromptTokens(),
+                upstreamUsage.getCompletionTokens(),
+                upstreamUsage.getTotalTokens()
+        );
+
         return new ChatCompletionResponse(
                 id,
                 "chat.completion",
                 Instant.now().getEpochSecond(),
                 modelAlias,
-                List.of(choice)
+                List.of(choice),
+                usage
         );
     }
 
-    private ChatCompletionChunkResponse toOpenAiChunkResponse(String modelAlias, ChatResponse chatResponse, long created, boolean first) {
+    private Flux<ChatCompletionChunkResponse> toOpenAiChunkResponse(String modelAlias, ChatResponse chatResponse, long created, boolean first) {
 
-        String id = chatResponse.getMetadata().getId();
+        ChatResponseMetadata metadata = chatResponse.getMetadata();
+
+        String id = metadata.getId();
+        List<ChatCompletionChunkResponse> chunks = new ArrayList<>(2);
 
         Generation generation = chatResponse.getResult();
-        AssistantMessage output = generation.getOutput();
 
-        String content = output.getText();
-        String finishReason = normalizeFinishReason(generation.getMetadata().getFinishReason());
-        String role = first ? output.getMessageType().getValue() : null;
+        if (generation != null) {
+            AssistantMessage output = generation.getOutput();
 
-        ChatCompletionChunkResponse.Delta delta =
-                new ChatCompletionChunkResponse.Delta(role, content);
+            String content = output.getText();
+            String finishReason = normalizeFinishReason(generation.getMetadata().getFinishReason());
+            String role = first ? output.getMessageType().getValue() : null;
 
-        ChatCompletionChunkResponse.Choice choice =
-                new ChatCompletionChunkResponse.Choice(0, delta, finishReason);
+            ChatCompletionChunkResponse.Delta delta =
+                    new ChatCompletionChunkResponse.Delta(role, content);
 
-        return new ChatCompletionChunkResponse(
-                id,
-                "chat.completion.chunk",
-                created,
-                modelAlias,
-                List.of(choice)
-        );
+            ChatCompletionChunkResponse.Choice choice =
+                    new ChatCompletionChunkResponse.Choice(0, delta, finishReason);
+
+            chunks.add(new ChatCompletionChunkResponse(
+                    id,
+                    "chat.completion.chunk",
+                    created,
+                    modelAlias,
+                    List.of(choice),
+                    null
+            ));
+        }
+
+
+        Usage upstreamUsage = metadata.getUsage();
+        if (upstreamUsage.getTotalTokens() > 0) {
+            ChatCompletionUsage usage = new ChatCompletionUsage(
+                    upstreamUsage.getPromptTokens(),
+                    upstreamUsage.getCompletionTokens(),
+                    upstreamUsage.getTotalTokens()
+            );
+
+
+            chunks.add(new ChatCompletionChunkResponse(
+                    id,
+                    "chat.completion.chunk",
+                    created,
+                    modelAlias,
+                    List.of(),
+                    usage
+            ));
+        }
+
+        return Flux.fromIterable(chunks);
     }
 
     private Message toSpringAiMessage(ChatCompletionRequest.Message message) {

@@ -13,6 +13,7 @@ public class ChatCompletionResponse {
     private final long created;
     private final String model;
     private final List<Choice> choices;
+    private final ChatCompletionUsage usage;
 
     @Getter
     @AllArgsConstructor
