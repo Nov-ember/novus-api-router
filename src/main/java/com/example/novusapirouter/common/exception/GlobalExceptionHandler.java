@@ -1,5 +1,6 @@
 package com.example.novusapirouter.common.exception;
 
+import com.example.novusapirouter.common.result.Result;
 import com.example.novusapirouter.model.vo.ErrorResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -20,5 +21,10 @@ public class GlobalExceptionHandler {
         ErrorResponse errorResponse = new ErrorResponse(errorDetail);
 
         return new ResponseEntity<>(errorResponse, e.getStatus());
+    }
+
+    @ExceptionHandler(BusinessException.class)
+    public Result<Void> handleBusinessException(BusinessException e) {
+        return Result.error(e.getMessage());
     }
 }

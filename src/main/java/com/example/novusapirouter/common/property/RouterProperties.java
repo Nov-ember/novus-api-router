@@ -1,6 +1,7 @@
 package com.example.novusapirouter.common.property;
 
-import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
 import lombok.ToString;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
@@ -8,7 +9,8 @@ import org.springframework.stereotype.Component;
 import java.util.HashMap;
 import java.util.Map;
 
-@Data
+@Getter
+@Setter
 @Component
 @ConfigurationProperties(prefix = "novus.router")
 public class RouterProperties {
@@ -17,14 +19,16 @@ public class RouterProperties {
     private Map<String, Channel> channels = new HashMap<>();
     private Map<String, ModelMapping> modelAliases = new HashMap<>();
 
-    @Data
+    @Getter
+    @Setter
     public static class Channel {
         private String baseUrl;
         @ToString.Exclude
         private String apiKey;
     }
 
-    @Data
+    @Getter
+    @Setter
     public static class ModelMapping {
         private String channel;
         private String upstreamModel;

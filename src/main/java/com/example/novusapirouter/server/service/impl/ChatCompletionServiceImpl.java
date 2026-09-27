@@ -300,7 +300,6 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         }
     }
 
-    // finish_reason 字符串全大写转全小写
     private String normalizeFinishReason(String finishReason) {
         return finishReason == null ? null : finishReason.toLowerCase(Locale.ROOT);
     }
