@@ -35,11 +35,12 @@ mybatis-plus:
   type-aliases-package: com.example.novusapirouter.model.entity
   configuration:
     map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
 
 novus:
   router:
-    access-key: ${ROUTER_ACCESS_KEY}
-    stream-time-out-millis: 120000
     channels:
       qwen-01:
         base-url: https://dashscope.aliyuncs.com/compatible-mode/v1

@@ -6,6 +6,7 @@ import com.example.novusapirouter.model.dto.ChatCompletionRequest;
 import com.example.novusapirouter.model.vo.ChatCompletionChunkResponse;
 import com.example.novusapirouter.model.vo.ChatCompletionResponse;
 import com.example.novusapirouter.model.vo.ChatCompletionUsage;
+import com.example.novusapirouter.server.service.ApiKeyService;
 import com.example.novusapirouter.server.service.ChatCompletionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
@@ -27,7 +28,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -35,10 +35,11 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
 
     private final Map<String, ChatClient> chatClients;
     private final RouterProperties routerProperties;
+    private final ApiKeyService apiKeyService;
 
     @Override
     public ChatCompletionResponse chatCompletion(String apiKey, ChatCompletionRequest request) {
-        checkApiKey(apiKey);
+        apiKeyService.checkApiKey(apiKey);
         checkRequest(request);
 
         String modelAlias = request.getModel();
@@ -61,7 +62,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
 
     @Override
     public Flux<ChatCompletionChunkResponse> streamChatCompletion(String apiKey, ChatCompletionRequest request) {
-        checkApiKey(apiKey);
+        apiKeyService.checkApiKey(apiKey);
         checkRequest(request);
 
         String modelAlias = request.getModel();
@@ -276,28 +277,6 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                     "messages"
             );
         };
-    }
-
-    private void checkApiKey(String apiKey) {
-        String accessKey = routerProperties.getAccessKey();
-        if (accessKey == null || accessKey.isBlank()) {
-            throw new RouterException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "服务配置错误",
-                    "server_error",
-                    "internal_error",
-                    null
-            );
-        }
-        if (apiKey == null || apiKey.isBlank() || !Objects.equals(apiKey, accessKey)) {
-            throw new RouterException(
-                    HttpStatus.UNAUTHORIZED,
-                    "API Key 无效",
-                    "invalid_request_error",
-                    "invalid_api_key",
-                    null
-            );
-        }
     }
 
     private String normalizeFinishReason(String finishReason) {

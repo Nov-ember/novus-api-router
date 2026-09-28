@@ -14,10 +14,10 @@ import java.util.Map;
 @Component
 @ConfigurationProperties(prefix = "novus.router")
 public class RouterProperties {
-    private String accessKey;
     private Long streamTimeOutMillis = 120_000L;
     private Map<String, Channel> channels = new HashMap<>();
     private Map<String, ModelMapping> modelAliases = new HashMap<>();
+    private int maxActiveKeysPerUser = 200;
 
     @Getter
     @Setter

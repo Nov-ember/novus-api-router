@@ -23,10 +23,8 @@ public class JwtInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        String token = request.getHeader("Authorization");
-        if (token != null && token.startsWith("Bearer ")) {
-            token = token.substring(7);
-        }
+        String authorization = request.getHeader("Authorization");
+        String token = extractBearerToken(authorization);
 
         try {
             Long uid = jwtUtils.parseUid(token);
@@ -41,5 +39,12 @@ public class JwtInterceptor implements HandlerInterceptor {
     @Override
     public void afterCompletion(@NonNull HttpServletRequest request, @NonNull HttpServletResponse response, @NonNull Object handler, Exception ex) {
         UserContext.clear();
+    }
+
+    private String extractBearerToken(String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return "";
+        }
+        return authorization.substring("Bearer ".length());
     }
 }

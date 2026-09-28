@@ -1,7 +1,6 @@
 package com.example.novusapirouter.server.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.spring.service.impl.ServiceImpl;
 import com.example.novusapirouter.common.exception.BusinessException;
 import com.example.novusapirouter.common.util.JwtUtils;
 import com.example.novusapirouter.model.dto.LoginDTO;
@@ -16,8 +15,9 @@ import org.springframework.util.StringUtils;
 
 @Service
 @RequiredArgsConstructor
-public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements AuthService {
+public class AuthServiceImpl implements AuthService {
 
+    private final UserMapper userMapper;
     private final BCryptPasswordEncoder passwordEncoder;
     private final JwtUtils jwtUtils;
 
@@ -30,21 +30,21 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
                 .username(registerDTO.getUsername())
                 .nickname(StringUtils.hasText(registerDTO.getNickname()) ? registerDTO.getUsername() : registerDTO.getNickname())
                 .email(registerDTO.getEmail())
-                .password(passwordEncoder.encode(registerDTO.getPassword()))
+                .passwordHash(passwordEncoder.encode(registerDTO.getPassword()))
                 .build();
-        this.save(user);
+        userMapper.insert(user);
 
         return jwtUtils.createToken(user.getId());
     }
 
     private void checkEmailUnique(String email) {
-        if (this.count(new LambdaQueryWrapper<User>().eq(User::getEmail, email)) > 0) {
+        if (userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getEmail, email)) > 0) {
             throw new BusinessException("邮箱已存在");
         }
     }
 
     private void checkUsernameUnique(String username) {
-        if (this.count(new LambdaQueryWrapper<User>().eq(User::getUsername, username)) > 0) {
+        if (userMapper.selectCount(new LambdaQueryWrapper<User>().eq(User::getUsername, username)) > 0) {
             throw new BusinessException("用户名已存在");
         }
     }
@@ -60,8 +60,8 @@ public class AuthServiceImpl extends ServiceImpl<UserMapper, User> implements Au
             throw new BusinessException("请输入账号信息");
         }
 
-        User user = this.getOne(wrapper);
-        if (user == null || !passwordEncoder.matches(loginDTO.getPassword(), user.getPassword())) {
+        User user = userMapper.selectOne(wrapper);
+        if (user == null || !passwordEncoder.matches(loginDTO.getPassword(), user.getPasswordHash())) {
             throw new BusinessException("账号信息或密码错误");
         }
         return jwtUtils.createToken(user.getId());
