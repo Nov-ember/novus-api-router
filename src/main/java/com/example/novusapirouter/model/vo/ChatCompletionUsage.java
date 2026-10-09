@@ -9,12 +9,12 @@ import lombok.Getter;
 
 public class ChatCompletionUsage {
     @JsonProperty("prompt_tokens")
-    private final int promptTokens;
+    private final Integer promptTokens;
 
     @JsonProperty("completion_tokens")
-    private final int completionTokens;
+    private final Integer completionTokens;
 
     @JsonProperty("total_tokens")
-    private final int totalTokens;
+    private final Integer totalTokens;
 }
 

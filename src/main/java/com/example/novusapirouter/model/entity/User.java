@@ -1,7 +1,6 @@
 package com.example.novusapirouter.model.entity;
 
 import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.*;
 
@@ -12,7 +11,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @TableName("user")
 public class User {
-    @TableId(type = IdType.AUTO)
+    @TableId
     private Long id;
     private String username;
     private String nickname;

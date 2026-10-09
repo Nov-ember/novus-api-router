@@ -20,7 +20,6 @@ public class ChatCompletionResponse {
     public static class Choice {
         private final int index;
         private final Message message;
-
         @JsonProperty("finish_reason")
         private final String finishReason;
     }

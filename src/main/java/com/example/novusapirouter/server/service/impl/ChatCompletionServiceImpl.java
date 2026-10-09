@@ -1,5 +1,6 @@
 package com.example.novusapirouter.server.service.impl;
 
+import com.example.novusapirouter.common.context.ApiKeyIdentity;
 import com.example.novusapirouter.common.exception.RouterException;
 import com.example.novusapirouter.common.property.RouterProperties;
 import com.example.novusapirouter.model.dto.ChatCompletionRequest;
@@ -7,8 +8,10 @@ import com.example.novusapirouter.model.vo.ChatCompletionChunkResponse;
 import com.example.novusapirouter.model.vo.ChatCompletionResponse;
 import com.example.novusapirouter.model.vo.ChatCompletionUsage;
 import com.example.novusapirouter.server.service.ApiKeyService;
+import com.example.novusapirouter.server.service.BillService;
 import com.example.novusapirouter.server.service.ChatCompletionService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
@@ -19,16 +22,20 @@ import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.ai.tokenizer.JTokkitTokenCountEstimator;
+import org.springframework.ai.tokenizer.TokenCountEstimator;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatCompletionServiceImpl implements ChatCompletionService {
@@ -36,65 +43,116 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
     private final Map<String, ChatClient> chatClients;
     private final RouterProperties routerProperties;
     private final ApiKeyService apiKeyService;
+    private final BillService billService;
+    private final TokenCountEstimator tokenCountEstimator = new JTokkitTokenCountEstimator();
 
     @Override
     public ChatCompletionResponse chatCompletion(String apiKey, ChatCompletionRequest request) {
-        apiKeyService.checkApiKey(apiKey);
+        ApiKeyIdentity apiKeyIdentity = apiKeyService.checkApiKey(apiKey);
         checkRequest(request);
 
         String modelAlias = request.getModel();
-        RouterProperties.ModelMapping mapping = resolveModel(modelAlias);
-        ChatClient chatClient = chatClients.get(mapping.getChannel());
-        String upstreamModel = mapping.getUpstreamModel();
+        RouterProperties.ModelConfig modelConfig = resolveModel(modelAlias);
+        ChatClient chatClient = chatClients.get(modelConfig.getChannel());
+        String upstreamModel = modelConfig.getUpstreamModel();
 
         List<Message> messages = request.getMessages().stream()
                 .map(this::toSpringAiMessage)
                 .toList();
 
-        ChatResponse chatResponse = chatClient.prompt()
-                .messages(messages)
-                .options(ChatOptions.builder().model(upstreamModel))
-                .call()
-                .chatResponse();
+        Integer inputBudgetTokens = estimateInputTokens(messages);
+        Integer maxOutputTokens = request.getMaxCompletionTokens() == null ?
+                routerProperties.getDefaultMaxCompletionTokens()
+                : request.getMaxCompletionTokens();
 
-        return toOpenAiResponse(modelAlias, chatResponse);
+        Long billId = billService.reserve(apiKeyIdentity, modelAlias, inputBudgetTokens, maxOutputTokens);
+
+        try {
+            ChatResponse chatResponse = chatClient.prompt()
+                    .messages(messages)
+                    .options(ChatOptions.builder().model(upstreamModel).maxTokens(maxOutputTokens))
+                    .call()
+                    .chatResponse();
+
+            ChatCompletionResponse result = toOpenAiResponse(modelAlias, chatResponse);
+
+            ChatCompletionUsage usage = result.getUsage();
+            billService.settle(billId, usage.getPromptTokens(), usage.getCompletionTokens());
+
+            return result;
+        } catch (Exception e) {
+            try {
+                billService.release(billId);
+            } catch (Exception releaseError) {
+                e.addSuppressed(releaseError);
+                log.error("非流式调用释放预留失败，billId={}", billId, releaseError);
+            }
+            throw e;
+        }
     }
 
     @Override
     public Flux<ChatCompletionChunkResponse> streamChatCompletion(String apiKey, ChatCompletionRequest request) {
-        apiKeyService.checkApiKey(apiKey);
+        ApiKeyIdentity apiKeyIdentity = apiKeyService.checkApiKey(apiKey);
         checkRequest(request);
 
         String modelAlias = request.getModel();
-        RouterProperties.ModelMapping mapping = resolveModel(modelAlias);
-        ChatClient chatClient = chatClients.get(mapping.getChannel());
-        String upstreamModel = mapping.getUpstreamModel();
+        RouterProperties.ModelConfig modelConfig = resolveModel(modelAlias);
+        ChatClient chatClient = chatClients.get(modelConfig.getChannel());
+        String upstreamModel = modelConfig.getUpstreamModel();
 
         List<Message> messages = request.getMessages().stream()
                 .map(this::toSpringAiMessage)
                 .toList();
 
-        Flux<ChatResponse> chatResponseFlux = chatClient.prompt()
-                .messages(messages)
-                .options(ChatOptions.builder().model(upstreamModel))
-                .stream()
-                .chatResponse();
+        Integer inputBudgetTokens = estimateInputTokens(messages);
+        Integer maxOutputTokens = request.getMaxCompletionTokens() == null ?
+                routerProperties.getDefaultMaxCompletionTokens()
+                : request.getMaxCompletionTokens();
 
-        long created = Instant.now().getEpochSecond();
 
-        return chatResponseFlux
-                .index()
-                .concatMap(tuple2 -> toOpenAiChunkResponse(
-                        modelAlias,
-                        tuple2.getT2(),
-                        created,
-                        tuple2.getT1() == 0
-                ));
+        return Flux.defer(() -> {
+            Long billId = billService.reserve(apiKeyIdentity, modelAlias, inputBudgetTokens, maxOutputTokens);
+
+            return Flux.defer(() -> {
+                        Flux<ChatResponse> chatResponseFlux = chatClient.prompt()
+                                .messages(messages)
+                                .options(ChatOptions.builder().model(upstreamModel).maxTokens(maxOutputTokens))
+                                .stream()
+                                .chatResponse();
+
+                        long created = Instant.now().getEpochSecond();
+
+                        return chatResponseFlux
+                                .doOnNext(chatResponse -> {
+                                    Usage usage = chatResponse.getMetadata().getUsage();
+                                    if (usage.getTotalTokens() > 0) {
+                                        billService.settle(billId, usage.getPromptTokens(), usage.getCompletionTokens());
+                                    }
+                                })
+                                .index()
+                                .concatMap(tuple2 -> toOpenAiChunkResponse(
+                                        modelAlias,
+                                        tuple2.getT2(),
+                                        created,
+                                        tuple2.getT1() == 0
+                                ));
+                    })
+                    .timeout(Duration.ofMillis(routerProperties.getStreamTimeOutMillis()))
+                    .doOnError(error -> {
+                        try {
+                            billService.release(billId);
+                        } catch (Exception releaseError) {
+                            error.addSuppressed(releaseError);
+                            log.error("流式调用释放预留失败，billId={}", billId, releaseError);
+                        }
+                    });
+        });
     }
 
-    private RouterProperties.ModelMapping resolveModel(String modelAlias) {
-        RouterProperties.ModelMapping mapping = routerProperties.getModelAliases().get(modelAlias);
-        if (mapping == null) {
+    private RouterProperties.ModelConfig resolveModel(String modelAlias) {
+        RouterProperties.ModelConfig modelConfig = routerProperties.getModelAliases().get(modelAlias);
+        if (modelConfig == null) {
             throw new RouterException(
                     HttpStatus.NOT_FOUND,
                     "模型不存在",
@@ -103,7 +161,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                     "model"
             );
         }
-        return mapping;
+        return modelConfig;
     }
 
     private void checkRequest(ChatCompletionRequest request) {
@@ -164,6 +222,16 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                         param + ".content"
                 );
             }
+        }
+
+        if (request.getMaxCompletionTokens() != null && request.getMaxCompletionTokens() <= 0) {
+            throw new RouterException(
+                    HttpStatus.BAD_REQUEST,
+                    "输出 token 上限必须为正数",
+                    "invalid_request_error",
+                    "invalid_request",
+                    "max_completion_tokens"
+            );
         }
     }
 
@@ -281,5 +349,11 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
 
     private String normalizeFinishReason(String finishReason) {
         return finishReason == null ? null : finishReason.toLowerCase(Locale.ROOT);
+    }
+
+    private Integer estimateInputTokens(List<Message> messages) {
+        return messages.stream()
+                .mapToInt(message -> tokenCountEstimator.estimate(message.getText()))
+                .sum();
     }
 }

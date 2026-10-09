@@ -43,12 +43,10 @@ public class ApiKeyServiceImpl implements ApiKeyService {
     @Override
     @Transactional
     public String createApiKey(ApiKeyNameDTO apiKeyNameDTO) {
-        int updated = userMapper.update(new LambdaUpdateWrapper<User>()
+        if (userMapper.update(new LambdaUpdateWrapper<User>()
                 .eq(User::getId, UserContext.getUid())
                 .lt(User::getActiveKeyCount, routerProperties.getMaxActiveKeysPerUser())
-                .setIncrBy(User::getActiveKeyCount, 1));
-
-        if (updated == 0) {
+                .setIncrBy(User::getActiveKeyCount, 1)) != 1) {
             throw new BusinessException("API key 数量已达上限");
         }
 
@@ -62,9 +60,7 @@ public class ApiKeyServiceImpl implements ApiKeyService {
                 .status(ApiKey.ACTIVE)
                 .build();
 
-        int inserted = apiKeyMapper.insert(apiKey);
-
-        if (inserted == 0) {
+        if (apiKeyMapper.insert(apiKey) != 1) {
             throw new BusinessException("API key 创建失败");
         }
 
@@ -88,12 +84,11 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         checkApiKeyExists(apiKey);
         checkOwnerShip(apiKey.getUserId());
 
-        int updated = apiKeyMapper.update(new LambdaUpdateWrapper<ApiKey>()
+        if (apiKeyMapper.update(new LambdaUpdateWrapper<ApiKey>()
                 .eq(ApiKey::getId, id)
                 .eq(ApiKey::getUserId, UserContext.getUid())
                 .eq(ApiKey::getStatus, ApiKey.ACTIVE)
-                .set(ApiKey::getName, apiKeyNameDTO.getName()));
-        if (updated == 0) {
+                .set(ApiKey::getName, apiKeyNameDTO.getName())) != 1) {
             throw new BusinessException("API Key 名称更新失败");
         }
     }
@@ -105,20 +100,18 @@ public class ApiKeyServiceImpl implements ApiKeyService {
         checkApiKeyExists(apiKey);
         checkOwnerShip(apiKey.getUserId());
 
-        int keyUpdated = apiKeyMapper.update(new LambdaUpdateWrapper<ApiKey>()
+        if (apiKeyMapper.update(new LambdaUpdateWrapper<ApiKey>()
                 .eq(ApiKey::getId, id)
                 .eq(ApiKey::getUserId, UserContext.getUid())
                 .eq(ApiKey::getStatus, ApiKey.ACTIVE)
-                .set(ApiKey::getStatus, ApiKey.REVOKED));
-        if (keyUpdated == 0) {
+                .set(ApiKey::getStatus, ApiKey.REVOKED)) != 1) {
             return;
         }
 
-        int userUpdated = userMapper.update(new LambdaUpdateWrapper<User>()
+        if (userMapper.update(new LambdaUpdateWrapper<User>()
                 .eq(User::getId, UserContext.getUid())
                 .gt(User::getActiveKeyCount, 0)
-                .setDecrBy(User::getActiveKeyCount, 1));
-        if (userUpdated == 0) {
+                .setDecrBy(User::getActiveKeyCount, 1)) != 1) {
             throw new BusinessException("用户 API Key 计数更新失败");
         }
 

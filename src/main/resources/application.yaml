@@ -52,13 +52,21 @@ novus:
       "[qwen3.8-flash]":
         channel: qwen-01
         upstream-model: qwen3.8-flash
+        input-price-per-million: 0.4
+        output-price-per-million: 1.35
       deepseek-flash:
         channel: deepseek-01
         upstream-model: deepseek-flash
+        input-price-per-million: 1
+        output-price-per-million: 4
 
   jwt:
     secret: ${JWT_SECRET}
     expire-hours: 24
+
+  wallet:
+    admin-user-ids:
+      - 1
 
 
 

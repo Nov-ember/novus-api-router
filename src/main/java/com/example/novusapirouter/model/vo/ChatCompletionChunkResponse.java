@@ -22,14 +22,12 @@ public class ChatCompletionChunkResponse {
     public static class Choice {
         private final int index;
         private final Delta delta;
-
         @JsonProperty("finish_reason")
         private final String finishReason;
     }
 
     @Getter
     @AllArgsConstructor
-    // 值为 null 的字段不展示在 JSON 中
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Delta {
         private final String role;
