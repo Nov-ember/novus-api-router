@@ -20,15 +20,16 @@ public class ChatCompletionController {
 
     @PostMapping
     public ResponseEntity<?> chatCompletion(@RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authorization,
+                                            @RequestHeader(value = "X-Session-Id", required = false) String sessionId,
                                             @RequestBody ChatCompletionRequest request) {
         String apiKey = extractBearerToken(authorization);
 
         if (!Boolean.TRUE.equals(request.getStream())) {
             return ResponseEntity.ok()
                     .contentType(MediaType.APPLICATION_JSON)
-                    .body(chatCompletionService.chatCompletion(apiKey, request));
+                    .body(chatCompletionService.chatCompletion(apiKey, sessionId, request));
         } else {
-            Flux<ChatCompletionChunkResponse> chunks = chatCompletionService.streamChatCompletion(apiKey, request);
+            Flux<ChatCompletionChunkResponse> chunks = chatCompletionService.streamChatCompletion(apiKey, sessionId, request);
             Flux<ServerSentEvent<Object>> events = chunks
                     .map(chunk -> ServerSentEvent.builder()
                             .data(chunk)

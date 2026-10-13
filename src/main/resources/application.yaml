@@ -50,15 +50,22 @@ novus:
         api-key: ${DEEPSEEK_API_KEY_1}
     model-aliases:
       "[qwen3.8-flash]":
-        channel: qwen-01
-        upstream-model: qwen3.8-flash
         input-price-per-million: 0.4
         output-price-per-million: 1.35
+        routes:
+          - id : 1
+            channel: qwen-01
+            upstream-model: qwen3.8-flash
       deepseek-flash:
-        channel: deepseek-01
-        upstream-model: deepseek-flash
         input-price-per-million: 1
         output-price-per-million: 4
+        routes:
+          - id : 2
+            channel: deepseek-01
+            upstream-model: deepseek-flash
+          - id: 3
+            channel: qwen-01
+            upstream-model: deepseek-v4.1-flash
 
   jwt:
     secret: ${JWT_SECRET}
@@ -67,6 +74,8 @@ novus:
   wallet:
     admin-user-ids:
       - 1
+      - 2
+      - 3
 
 
 

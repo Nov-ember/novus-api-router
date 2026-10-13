@@ -10,6 +10,7 @@ import com.example.novusapirouter.model.vo.ChatCompletionUsage;
 import com.example.novusapirouter.server.service.ApiKeyService;
 import com.example.novusapirouter.server.service.BillService;
 import com.example.novusapirouter.server.service.ChatCompletionService;
+import com.example.novusapirouter.server.service.ModelRouter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -27,6 +28,7 @@ import org.springframework.ai.tokenizer.TokenCountEstimator;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.SignalType;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -44,17 +46,18 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
     private final RouterProperties routerProperties;
     private final ApiKeyService apiKeyService;
     private final BillService billService;
+    private final ModelRouter modelRouter;
     private final TokenCountEstimator tokenCountEstimator = new JTokkitTokenCountEstimator();
 
     @Override
-    public ChatCompletionResponse chatCompletion(String apiKey, ChatCompletionRequest request) {
+    public ChatCompletionResponse chatCompletion(String apiKey, String sessionId, ChatCompletionRequest request) {
         ApiKeyIdentity apiKeyIdentity = apiKeyService.checkApiKey(apiKey);
         checkRequest(request);
 
         String modelAlias = request.getModel();
-        RouterProperties.ModelConfig modelConfig = resolveModel(modelAlias);
-        ChatClient chatClient = chatClients.get(modelConfig.getChannel());
-        String upstreamModel = modelConfig.getUpstreamModel();
+        RouterProperties.Route route = modelRouter.selectRoute(apiKeyIdentity.getApiKeyId(), modelAlias, sessionId);
+        ChatClient chatClient = chatClients.get(route.getChannel());
+        String upstreamModel = route.getUpstreamModel();
 
         List<Message> messages = request.getMessages().stream()
                 .map(this::toSpringAiMessage)
@@ -92,14 +95,14 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
     }
 
     @Override
-    public Flux<ChatCompletionChunkResponse> streamChatCompletion(String apiKey, ChatCompletionRequest request) {
+    public Flux<ChatCompletionChunkResponse> streamChatCompletion(String apiKey, String sessionId, ChatCompletionRequest request) {
         ApiKeyIdentity apiKeyIdentity = apiKeyService.checkApiKey(apiKey);
         checkRequest(request);
 
         String modelAlias = request.getModel();
-        RouterProperties.ModelConfig modelConfig = resolveModel(modelAlias);
-        ChatClient chatClient = chatClients.get(modelConfig.getChannel());
-        String upstreamModel = modelConfig.getUpstreamModel();
+        RouterProperties.Route route = modelRouter.selectRoute(apiKeyIdentity.getApiKeyId(), modelAlias, sessionId);
+        ChatClient chatClient = chatClients.get(route.getChannel());
+        String upstreamModel = route.getUpstreamModel();
 
         List<Message> messages = request.getMessages().stream()
                 .map(this::toSpringAiMessage)
@@ -146,22 +149,17 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                             error.addSuppressed(releaseError);
                             log.error("流式调用释放预留失败，billId={}", billId, releaseError);
                         }
+                    })
+                    .doFinally(signalType -> {
+                        if (signalType == SignalType.CANCEL) {
+                            try {
+                                billService.release(billId);
+                            } catch (Exception releaseError) {
+                                log.error("流式取消后释放预留失败，billId={}", billId, releaseError);
+                            }
+                        }
                     });
         });
-    }
-
-    private RouterProperties.ModelConfig resolveModel(String modelAlias) {
-        RouterProperties.ModelConfig modelConfig = routerProperties.getModelAliases().get(modelAlias);
-        if (modelConfig == null) {
-            throw new RouterException(
-                    HttpStatus.NOT_FOUND,
-                    "模型不存在",
-                    "invalid_request_error",
-                    "model_not_found",
-                    "model"
-            );
-        }
-        return modelConfig;
     }
 
     private void checkRequest(ChatCompletionRequest request) {

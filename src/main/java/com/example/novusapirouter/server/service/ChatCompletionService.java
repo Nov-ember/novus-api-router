@@ -6,7 +6,7 @@ import com.example.novusapirouter.model.vo.ChatCompletionResponse;
 import reactor.core.publisher.Flux;
 
 public interface ChatCompletionService {
-    ChatCompletionResponse chatCompletion(String apiKey, ChatCompletionRequest request);
+    ChatCompletionResponse chatCompletion(String apiKey, String sessionId, ChatCompletionRequest request);
 
-    Flux<ChatCompletionChunkResponse> streamChatCompletion(String apiKey, ChatCompletionRequest request);
+    Flux<ChatCompletionChunkResponse> streamChatCompletion(String apiKey, String sessionId, ChatCompletionRequest request);
 }
