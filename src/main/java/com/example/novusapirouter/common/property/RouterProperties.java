@@ -20,7 +20,9 @@ public class RouterProperties {
     private Long streamTimeOutMillis = 120_000L;
     private Integer maxActiveKeysPerUser = 200;
     private Integer defaultMaxCompletionTokens = 4096;
+    private Integer prefixLengthChars = 1024;
     private Long sessionAffinityTtlSeconds = 3600L;
+    private Long prefixRoutingTtlSeconds = 300L;
     private Map<String, ModelConfig> modelAliases = new HashMap<>();
     private Map<String, Channel> channels = new HashMap<>();
 

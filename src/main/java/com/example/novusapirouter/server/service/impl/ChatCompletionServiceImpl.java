@@ -55,7 +55,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         checkRequest(request);
 
         String modelAlias = request.getModel();
-        RouterProperties.Route route = modelRouter.selectRoute(apiKeyIdentity.getApiKeyId(), modelAlias, sessionId);
+        RouterProperties.Route route = modelRouter.selectRoute(apiKeyIdentity.getApiKeyId(), modelAlias, sessionId, request.getMessages());
         ChatClient chatClient = chatClients.get(route.getChannel());
         String upstreamModel = route.getUpstreamModel();
 
@@ -82,6 +82,8 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
             ChatCompletionUsage usage = result.getUsage();
             billService.settle(billId, usage.getPromptTokens(), usage.getCompletionTokens());
 
+            modelRouter.savePrefixRouteMapping(apiKeyIdentity.getApiKeyId(), modelAlias, request.getMessages(), route.getId());
+
             return result;
         } catch (Exception e) {
             try {
@@ -100,7 +102,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         checkRequest(request);
 
         String modelAlias = request.getModel();
-        RouterProperties.Route route = modelRouter.selectRoute(apiKeyIdentity.getApiKeyId(), modelAlias, sessionId);
+        RouterProperties.Route route = modelRouter.selectRoute(apiKeyIdentity.getApiKeyId(), modelAlias, sessionId, request.getMessages());
         ChatClient chatClient = chatClients.get(route.getChannel());
         String upstreamModel = route.getUpstreamModel();
 
@@ -142,6 +144,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                                 ));
                     })
                     .timeout(Duration.ofMillis(routerProperties.getStreamTimeOutMillis()))
+                    .doOnComplete(() -> modelRouter.savePrefixRouteMapping(apiKeyIdentity.getApiKeyId(), modelAlias, request.getMessages(), route.getId()))
                     .doOnError(error -> {
                         try {
                             billService.release(billId);
