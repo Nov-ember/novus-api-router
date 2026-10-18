@@ -80,7 +80,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
             ChatCompletionResponse result = toOpenAiResponse(modelAlias, chatResponse);
 
             ChatCompletionUsage usage = result.getUsage();
-            billService.settle(billId, usage.getPromptTokens(), usage.getCompletionTokens());
+            billService.settle(billId, usage.getPromptTokens(), usage.getPromptTokensDetails().getCachedTokens(), usage.getCompletionTokens());
 
             modelRouter.savePrefixRouteMapping(apiKeyIdentity.getApiKeyId(), modelAlias, request.getMessages(), route.getId());
 
@@ -132,7 +132,8 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                                 .doOnNext(chatResponse -> {
                                     Usage usage = chatResponse.getMetadata().getUsage();
                                     if (usage.getTotalTokens() > 0) {
-                                        billService.settle(billId, usage.getPromptTokens(), usage.getCompletionTokens());
+                                        long cachedInputTokens = usage.getCacheReadInputTokens() == null ? 0L : usage.getCacheReadInputTokens();
+                                        billService.settle(billId, usage.getPromptTokens(), (int) cachedInputTokens, usage.getCompletionTokens());
                                     }
                                 })
                                 .index()
@@ -262,10 +263,12 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                 new ChatCompletionResponse.Choice(0, message, finishReason);
 
         Usage upstreamUsage = metadata.getUsage();
+        long cachedInputTokens = upstreamUsage.getCacheReadInputTokens() == null ? 0L : upstreamUsage.getCacheReadInputTokens();
         ChatCompletionUsage usage = new ChatCompletionUsage(
                 upstreamUsage.getPromptTokens(),
                 upstreamUsage.getCompletionTokens(),
-                upstreamUsage.getTotalTokens()
+                upstreamUsage.getTotalTokens(),
+                new ChatCompletionUsage.PromptTokensDetails((int) cachedInputTokens)
         );
 
         return new ChatCompletionResponse(
@@ -313,10 +316,12 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
 
         Usage upstreamUsage = metadata.getUsage();
         if (upstreamUsage.getTotalTokens() > 0) {
+            long cachedInputTokens = upstreamUsage.getCacheReadInputTokens() == null ? 0L : upstreamUsage.getCacheReadInputTokens();
             ChatCompletionUsage usage = new ChatCompletionUsage(
                     upstreamUsage.getPromptTokens(),
                     upstreamUsage.getCompletionTokens(),
-                    upstreamUsage.getTotalTokens()
+                    upstreamUsage.getTotalTokens(),
+                    new ChatCompletionUsage.PromptTokensDetails((int) cachedInputTokens)
             );
 
 

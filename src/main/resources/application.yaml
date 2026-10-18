@@ -50,14 +50,16 @@ novus:
         api-key: ${DEEPSEEK_API_KEY_1}
     model-aliases:
       "[qwen3.8-flash]":
-        input-price-per-million: 0.4
-        output-price-per-million: 1.35
+        input-price-per-million: 0.8
+        cached-input-price-per-million: 0.1
+        output-price-per-million: 2.7
         routes:
           - id : 1
             channel: qwen-01
             upstream-model: qwen3.8-flash
       deepseek-flash:
         input-price-per-million: 1
+        cached-input-price-per-million: 0.02
         output-price-per-million: 4
         routes:
           - id : 2

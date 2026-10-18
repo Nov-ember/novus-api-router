@@ -24,9 +24,11 @@ public class Bill {
     private Long apiKeyId;
     private String modelAlias;
     private Integer inputTokens;
+    private Integer cachedInputTokens;
     private Integer outputTokens;
     private BigDecimal frozenAmount;
     private BigDecimal inputPricePerMillion;
+    private BigDecimal cachedInputPricePerMillion;
     private BigDecimal outputPricePerMillion;
     private BigDecimal actualAmount;
     private String status;

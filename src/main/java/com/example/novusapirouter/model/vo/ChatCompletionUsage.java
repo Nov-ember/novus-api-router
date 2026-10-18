@@ -16,5 +16,15 @@ public class ChatCompletionUsage {
 
     @JsonProperty("total_tokens")
     private final Integer totalTokens;
+
+    @JsonProperty("prompt_tokens_details")
+    private final PromptTokensDetails promptTokensDetails;
+
+    @Getter
+    @AllArgsConstructor
+    public static class PromptTokensDetails {
+        @JsonProperty("cached_tokens")
+        private final Integer cachedTokens;
+    }
 }
 

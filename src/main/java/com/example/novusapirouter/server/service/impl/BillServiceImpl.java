@@ -30,6 +30,7 @@ public class BillServiceImpl implements BillService {
     public Long reserve(ApiKeyIdentity apiKeyIdentity, String modelAlias, Integer inputBudgetTokens, Integer maxOutputTokens) {
         RouterProperties.ModelConfig modelConfig = routerProperties.getModelAliases().get(modelAlias);
         BigDecimal inputPricePerMillion = modelConfig.getInputPricePerMillion();
+        BigDecimal cachedInputPricePerMillion = modelConfig.getCachedInputPricePerMillion();
         BigDecimal outputPricePerMillion = modelConfig.getOutputPricePerMillion();
         BigDecimal reserved = inputPricePerMillion.multiply(BigDecimal.valueOf(inputBudgetTokens))
                 .add(outputPricePerMillion.multiply(BigDecimal.valueOf(maxOutputTokens)))
@@ -55,6 +56,7 @@ public class BillServiceImpl implements BillService {
                 .modelAlias(modelAlias)
                 .frozenAmount(reserved)
                 .inputPricePerMillion(inputPricePerMillion)
+                .cachedInputPricePerMillion(cachedInputPricePerMillion)
                 .outputPricePerMillion(outputPricePerMillion)
                 .status(Bill.RESERVED)
                 .build();
@@ -73,11 +75,12 @@ public class BillServiceImpl implements BillService {
 
     @Override
     @Transactional
-    public void settle(Long billId, Integer inputTokens, Integer outputTokens) {
+    public void settle(Long billId, Integer inputTokens, Integer cachedInputTokens, Integer outputTokens) {
         Bill bill = billMapper.selectById(billId);
         checkBillExists(bill);
 
-        BigDecimal actualAmount = bill.getInputPricePerMillion().multiply(BigDecimal.valueOf(inputTokens))
+        BigDecimal actualAmount = bill.getInputPricePerMillion().multiply(BigDecimal.valueOf(inputTokens - cachedInputTokens))
+                .add(bill.getCachedInputPricePerMillion().multiply(BigDecimal.valueOf(cachedInputTokens)))
                 .add(bill.getOutputPricePerMillion().multiply(BigDecimal.valueOf(outputTokens)))
                 .divide(BigDecimal.valueOf(1_000_000), 8, RoundingMode.HALF_UP);
 
@@ -89,6 +92,7 @@ public class BillServiceImpl implements BillService {
                 .eq(Bill::getStatus, Bill.RESERVED)
                 .set(Bill::getStatus, Bill.SETTLED)
                 .set(Bill::getInputTokens, inputTokens)
+                .set(Bill::getCachedInputTokens, cachedInputTokens)
                 .set(Bill::getOutputTokens, outputTokens)
                 .set(Bill::getActualAmount, actualAmount)) != 1) {
             throw new RouterException(

@@ -39,6 +39,7 @@ public class RouterProperties {
     public static class ModelConfig {
         private List<Route> routes = new ArrayList<>();
         private BigDecimal inputPricePerMillion;
+        private BigDecimal cachedInputPricePerMillion;
         private BigDecimal outputPricePerMillion;
     }
 
