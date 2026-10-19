@@ -23,6 +23,7 @@ public class Bill {
     private Long userId;
     private Long apiKeyId;
     private String modelAlias;
+    private String platform;
     private Integer inputTokens;
     private Integer cachedInputTokens;
     private Integer outputTokens;

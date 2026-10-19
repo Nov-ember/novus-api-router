@@ -29,6 +29,7 @@ public class RouterProperties {
     @Getter
     @Setter
     public static class Channel {
+        private String platform;
         private String baseUrl;
         @ToString.Exclude
         private String apiKey;

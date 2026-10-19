@@ -59,6 +59,10 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         ChatClient chatClient = chatClients.get(route.getChannel());
         String upstreamModel = route.getUpstreamModel();
 
+        String platform = routerProperties.getChannels()
+                .get(route.getChannel())
+                .getPlatform();
+
         List<Message> messages = request.getMessages().stream()
                 .map(this::toSpringAiMessage)
                 .toList();
@@ -68,7 +72,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
                 routerProperties.getDefaultMaxCompletionTokens()
                 : request.getMaxCompletionTokens();
 
-        Long billId = billService.reserve(apiKeyIdentity, modelAlias, inputBudgetTokens, maxOutputTokens);
+        Long billId = billService.reserve(apiKeyIdentity, modelAlias, platform, inputBudgetTokens, maxOutputTokens);
 
         try {
             ChatResponse chatResponse = chatClient.prompt()
@@ -106,6 +110,10 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
         ChatClient chatClient = chatClients.get(route.getChannel());
         String upstreamModel = route.getUpstreamModel();
 
+        String platform = routerProperties.getChannels()
+                .get(route.getChannel())
+                .getPlatform();
+
         List<Message> messages = request.getMessages().stream()
                 .map(this::toSpringAiMessage)
                 .toList();
@@ -117,7 +125,7 @@ public class ChatCompletionServiceImpl implements ChatCompletionService {
 
 
         return Flux.defer(() -> {
-            Long billId = billService.reserve(apiKeyIdentity, modelAlias, inputBudgetTokens, maxOutputTokens);
+            Long billId = billService.reserve(apiKeyIdentity, modelAlias, platform, inputBudgetTokens, maxOutputTokens);
 
             return Flux.defer(() -> {
                         Flux<ChatResponse> chatResponseFlux = chatClient.prompt()
