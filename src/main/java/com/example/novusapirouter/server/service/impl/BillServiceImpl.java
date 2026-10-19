@@ -1,11 +1,16 @@
 package com.example.novusapirouter.server.service.impl;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.example.novusapirouter.common.context.ApiKeyIdentity;
+import com.example.novusapirouter.common.context.UserContext;
+import com.example.novusapirouter.common.exception.BusinessException;
 import com.example.novusapirouter.common.exception.RouterException;
 import com.example.novusapirouter.common.property.RouterProperties;
+import com.example.novusapirouter.model.dto.BillStatisticsQueryDTO;
 import com.example.novusapirouter.model.entity.Bill;
 import com.example.novusapirouter.model.entity.UserWallet;
+import com.example.novusapirouter.model.vo.BillStatisticsVO;
 import com.example.novusapirouter.server.mapper.BillMapper;
 import com.example.novusapirouter.server.mapper.WalletMapper;
 import com.example.novusapirouter.server.service.BillService;
@@ -16,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -76,6 +82,18 @@ public class BillServiceImpl implements BillService {
     @Override
     @Transactional
     public void settle(Long billId, Integer inputTokens, Integer cachedInputTokens, Integer outputTokens) {
+        if (inputTokens == null || cachedInputTokens == null || outputTokens == null
+                || inputTokens < 0 || cachedInputTokens < 0 || outputTokens < 0
+                || cachedInputTokens > inputTokens) {
+            throw new RouterException(
+                    HttpStatus.BAD_GATEWAY,
+                    "上游返回的 token 用量不合法",
+                    "server_error",
+                    "invalid_upstream_usage",
+                    null
+            );
+        }
+
         Bill bill = billMapper.selectById(billId);
         checkBillExists(bill);
 
@@ -149,6 +167,47 @@ public class BillServiceImpl implements BillService {
                     null
             );
         }
+    }
+
+    @Override
+    public BillStatisticsVO getStatistics(BillStatisticsQueryDTO queryDTO) {
+        if (!queryDTO.getStartTime().isBefore(queryDTO.getEndTime())) {
+            throw new BusinessException("startTime 必须早于 endTime");
+        }
+
+        List<Bill> bills = billMapper.selectList(new LambdaQueryWrapper<Bill>()
+                .eq(Bill::getUserId, UserContext.getUid())
+                .eq(Bill::getStatus, Bill.SETTLED)
+                .ge(Bill::getCreateTime, queryDTO.getStartTime())
+                .lt(Bill::getCreateTime, queryDTO.getEndTime())
+                .eq(queryDTO.getApiKeyId() != null,
+                        Bill::getApiKeyId, queryDTO.getApiKeyId())
+                .eq(queryDTO.getModelAlias() != null,
+                        Bill::getModelAlias, queryDTO.getModelAlias()));
+
+        long totalInputTokens = 0;
+        long cachedInputTokens = 0;
+        long outputTokens = 0;
+        BigDecimal actualAmount = BigDecimal.ZERO;
+
+        for (Bill bill : bills) {
+            totalInputTokens += bill.getInputTokens();
+            cachedInputTokens += bill.getCachedInputTokens();
+            outputTokens += bill.getOutputTokens();
+            actualAmount = actualAmount.add(bill.getActualAmount());
+        }
+
+        long uncachedInputTokens = totalInputTokens - cachedInputTokens;
+        double cacheHitRate = totalInputTokens == 0 ? 0 : (double) cachedInputTokens / totalInputTokens;
+
+        return new BillStatisticsVO(
+                (long) bills.size(),
+                uncachedInputTokens,
+                cachedInputTokens,
+                outputTokens,
+                cacheHitRate,
+                actualAmount
+        );
     }
 
     private void checkBillExists(Bill bill) {
