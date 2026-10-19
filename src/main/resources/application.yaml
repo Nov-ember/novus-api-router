@@ -42,12 +42,10 @@ mybatis-plus:
 novus:
   router:
     channels:
-      dashscope-01:
-        platform: dashscope
+      qwen-01:
         base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
-        api-key: ${DASHSCOPE_API_KEY_1}
+        api-key: ${QWEN_API_KEY_1}
       deepseek-01:
-        platform: deepseek
         base-url: https://api.deepseek.com
         api-key: ${DEEPSEEK_API_KEY_1}
     model-aliases:
@@ -57,7 +55,7 @@ novus:
         output-price-per-million: 2.7
         routes:
           - id : 1
-            channel: dashscope-01
+            channel: qwen-01
             upstream-model: qwen3.8-flash
       deepseek-flash:
         input-price-per-million: 1
@@ -68,7 +66,7 @@ novus:
             channel: deepseek-01
             upstream-model: deepseek-flash
           - id: 3
-            channel: dashscope-01
+            channel: qwen-01
             upstream-model: deepseek-v4.1-flash
 
   jwt:

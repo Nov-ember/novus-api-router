@@ -27,7 +27,7 @@ public class BillServiceImpl implements BillService {
 
     @Override
     @Transactional
-    public Long reserve(ApiKeyIdentity apiKeyIdentity, String modelAlias, String platform, Integer inputBudgetTokens, Integer maxOutputTokens) {
+    public Long reserve(ApiKeyIdentity apiKeyIdentity, String modelAlias, Integer inputBudgetTokens, Integer maxOutputTokens) {
         RouterProperties.ModelConfig modelConfig = routerProperties.getModelAliases().get(modelAlias);
         BigDecimal inputPricePerMillion = modelConfig.getInputPricePerMillion();
         BigDecimal cachedInputPricePerMillion = modelConfig.getCachedInputPricePerMillion();
@@ -54,7 +54,6 @@ public class BillServiceImpl implements BillService {
                 .userId(apiKeyIdentity.getUserId())
                 .apiKeyId(apiKeyIdentity.getApiKeyId())
                 .modelAlias(modelAlias)
-                .platform(platform)
                 .frozenAmount(reserved)
                 .inputPricePerMillion(inputPricePerMillion)
                 .cachedInputPricePerMillion(cachedInputPricePerMillion)
