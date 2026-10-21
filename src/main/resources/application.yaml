@@ -2,16 +2,15 @@ spring:
   application:
     name: novus-api-router
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:novus_api_router}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
-    username: ${MYSQL_USERNAME:root}
-    password: ${MYSQL_PASSWORD:}
+    url: jdbc:mysql://${MYSQL_HOST}:${MYSQL_PORT:3306}/${MYSQL_DB:novus_api_router}?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai
+    username: ${MYSQL_USERNAME}
+    password: ${MYSQL_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   data:
     redis:
-      host: ${REDIS_HOST:localhost}
+      host: ${REDIS_HOST}
       port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
       database: ${REDIS_DATABASE:0}
 
   ai:
@@ -41,12 +40,18 @@ mybatis-plus:
 
 novus:
   router:
+    stream-time-out-millis: 120000
+    max-active-keys-per-user: 200
+    default-max-completion-tokens: 4096
+    prefix-length-chars: 1024
+    session-affinity-ttl-seconds: 3600
+    prefix-routing-ttl-seconds: 300
     channels:
       qwen-01:
-        base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+        base-url: ${QWEN_BASE_URL:https://maas.qianwenaiapi.com/compatible-mode/v1}
         api-key: ${QWEN_API_KEY_1}
       deepseek-01:
-        base-url: https://api.deepseek.com
+        base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com}
         api-key: ${DEEPSEEK_API_KEY_1}
     model-aliases:
       "[qwen3.8-flash]":
@@ -74,10 +79,7 @@ novus:
     expire-hours: 24
 
   wallet:
-    admin-user-ids:
-      - 1
-      - 2
-      - 3
+    admin-user-ids: ${ADMIN_USER_IDS:}
 
 
 

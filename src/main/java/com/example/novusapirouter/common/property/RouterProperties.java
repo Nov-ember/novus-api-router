@@ -17,7 +17,7 @@ import java.util.Map;
 @Component
 @ConfigurationProperties(prefix = "novus.router")
 public class RouterProperties {
-    private Long streamTimeOutMillis = 120_000L;
+    private Long streamTimeOutMillis = 120000L;
     private Integer maxActiveKeysPerUser = 200;
     private Integer defaultMaxCompletionTokens = 4096;
     private Integer prefixLengthChars = 1024;
